@@ -760,6 +760,16 @@ body {
 
   /* --- flow fixes --- */
   .hero { border-top: 0 !important; }
+  .pricing-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 16px; font-size: 12.5px; font-weight: 700;
+    letter-spacing: .04em; text-transform: uppercase;
+    color: #7f473b !important; text-decoration: none;
+    border-bottom: 1px solid rgba(127,71,59,.4); padding-bottom: 2px;
+    transition: border-color .15s, opacity .15s;
+  }
+  .pricing-link:hover { border-color: #7f473b; opacity: .8; }
+  .pricing-link:focus-visible { outline: 2px solid #7f473b; outline-offset: 3px; }
   .track { padding: 18px 18px 16px !important; }
   .track .dot { border-color: #9fb8b4 !important; }
   .track:has(input:checked) {
@@ -838,6 +848,9 @@ Welcome. Please complete the sections below so our team can begin reviewing your
 All information and documents submitted are treated as strictly confidential and are used solely
 for the purpose of onboarding and evaluating engagement with Etherial Holdings Inc. & Developments Group.
 </p>
+    <a class="pricing-link" href="pricing.html" target="_blank" rel="noopener">
+      View our services &amp; pricing <span aria-hidden="true">&rarr;</span>
+    </a>
   </div>
 
   <form id="onboardingForm" autocomplete="on" novalidate>
@@ -1327,7 +1340,7 @@ for the purpose of onboarding and evaluating engagement with Etherial Holdings I
           <div class="field full"><label>Credit scores <span class="opt">(if applicable)</span></label>
             <input type="text" name="kyc_credit_scores" placeholder="e.g. 740 EX, 735 EQ, 745 TU">
           </div>
-          <div class="field full"><label>Current residential address <span class="opt">(if different from above)</label>
+          <div class="field full"><label>Current residential address <span class="opt">(if different from above)</span></label>
             <input type="text" name="kyc_residential">
           </div>
           <div class="field full"><label>If at current address less than 2 years, list previous address(es) with MM/YY dates</label>
