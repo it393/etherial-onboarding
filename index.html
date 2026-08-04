@@ -1733,8 +1733,8 @@ for the purpose of onboarding and evaluating engagement with Etherial Holdings I
     });
   }
 
-  const MAX_FILE_BYTES = 1400000;   // ~1.4 MB per file before base64 inflation
-  const MAX_ATTEMPTS   = 3;
+  const MAX_FILE_BYTES = 7000000;   // ~7 MB per file (base64 inflates ~33%)
+  const MAX_ATTEMPTS   = 4;
 
   function prettyBytes(b) {
     if (b < 1024) return b + ' B';
@@ -1829,7 +1829,12 @@ for the purpose of onboarding and evaluating engagement with Etherial Holdings I
       // Step 1: create folder + write metadata
       const createRes = await postToWebhook({ action: 'create', fields }, 'create folder');
       if (!createRes.ok) throw new Error(createRes.error || 'Folder creation failed.');
+      console.log('[onboarding] create response keys: ' + Object.keys(createRes).join(', '));
       const folderId = createRes.folderId;
+      // The upgraded Apps Script nests uploads inside an "Uploaded Documents by ..."
+      // subfolder and requires its id. Fall back to folderId on older script versions.
+      const uploadFolderId = createRes.uploadFolderId || createRes.uploadsFolderId || folderId;
+      console.log('[onboarding] folderId=' + folderId + ' uploadFolderId=' + uploadFolderId);
 
       // Step 2: upload each file, one at a time
       for (let i = 0; i < files.length; i++) {
@@ -1841,6 +1846,7 @@ for the purpose of onboarding and evaluating engagement with Etherial Holdings I
         const upRes = await postToWebhook({
           action: 'upload',
           folderId,
+          uploadFolderId,
           docKey,
           fileName: file.name,
           mimeType: file.type || 'application/octet-stream',
@@ -1851,7 +1857,7 @@ for the purpose of onboarding and evaluating engagement with Etherial Holdings I
 
       // Step 3: finalize — send the notification email
       updateProgress(98, 'Finishing up…', '');
-      await postToWebhook({ action: 'finalize', folderId, fields, fileCount: files.length }, 'finalize');
+      await postToWebhook({ action: 'finalize', folderId, uploadFolderId, fields, fileCount: files.length }, 'finalize');
 
       updateProgress(100, 'Submission complete.', '');
       document.querySelectorAll('.card, .submit-card').forEach(el => el.style.display = 'none');
