@@ -1733,19 +1733,46 @@ for the purpose of onboarding and evaluating engagement with Etherial Holdings I
     });
   }
 
-  async function postToWebhook(payload) {
+  const MAX_FILE_BYTES = 1400000;   // ~1.4 MB per file before base64 inflation
+  const MAX_ATTEMPTS   = 3;
+
+  function prettyBytes(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b / 1024).toFixed(0) + ' KB';
+    return (b / 1048576).toFixed(2) + ' MB';
+  }
+
+  async function postToWebhook(payload, label) {
     // text/plain avoids a CORS preflight; Apps Script reads e.postData.contents
-    const res = await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      mode: 'cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload),
-      redirect: 'follow'
-    });
-    if (!res.ok) throw new Error('Server error ' + res.status);
-    const text = await res.text();
-    try { return JSON.parse(text); }
-    catch (e) { throw new Error('Bad response from server: ' + text.slice(0, 200)); }
+    const body = JSON.stringify(payload);
+    let lastErr = null;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const res = await fetch(WEBHOOK_URL, {
+          method: 'POST',
+          mode: 'cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: body,
+          redirect: 'follow'
+        });
+        if (!res.ok) throw new Error('Server error ' + res.status);
+        const text = await res.text();
+        try { return JSON.parse(text); }
+        catch (e) { throw new Error('Bad response from server: ' + text.slice(0, 200)); }
+      } catch (err) {
+        lastErr = err;
+        console.warn('[onboarding] attempt ' + attempt + '/' + MAX_ATTEMPTS +
+                     ' failed for ' + (label || payload.action) +
+                     ' (payload ' + prettyBytes(body.length) + '): ' + err.message);
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise(r => setTimeout(r, attempt * 1500));
+        }
+      }
+    }
+    throw new Error((lastErr && lastErr.message ? lastErr.message : 'Request failed') +
+                    ' [step: ' + (label || payload.action) +
+                    ', payload ' + prettyBytes(body.length) + ']');
   }
 
   function updateProgress(pct, label, detail) {
@@ -1783,8 +1810,24 @@ for the purpose of onboarding and evaluating engagement with Etherial Holdings I
 
       updateProgress(2, 'Creating your submission folder…', '');
 
+      // Pre-flight: log every file size, block anything too large for a single POST
+      const oversized = [];
+      console.log('[onboarding] files queued: ' + files.length);
+      files.forEach(({ file, docKey }) => {
+        console.log('  - ' + docKey + ' | ' + file.name + ' | ' + prettyBytes(file.size));
+        if (file.size > MAX_FILE_BYTES) oversized.push(file.name + ' (' + prettyBytes(file.size) + ')');
+      });
+      if (oversized.length) {
+        throw new Error(
+          'These files are too large to upload directly:\n\n' + oversized.join('\n') +
+          '\n\nMaximum is ' + prettyBytes(MAX_FILE_BYTES) + ' per file. ' +
+          'Please upload them to Google Drive or Dropbox and paste the share link ' +
+          'in the "Large file upload link" box at the end of the Document Uploads section.'
+        );
+      }
+
       // Step 1: create folder + write metadata
-      const createRes = await postToWebhook({ action: 'create', fields });
+      const createRes = await postToWebhook({ action: 'create', fields }, 'create folder');
       if (!createRes.ok) throw new Error(createRes.error || 'Folder creation failed.');
       const folderId = createRes.folderId;
 
@@ -1802,13 +1845,13 @@ for the purpose of onboarding and evaluating engagement with Etherial Holdings I
           fileName: file.name,
           mimeType: file.type || 'application/octet-stream',
           base64
-        });
+        }, 'upload ' + file.name + ' (' + prettyBytes(file.size) + ')');
         if (!upRes.ok) throw new Error(upRes.error || ('Upload failed for ' + file.name));
       }
 
       // Step 3: finalize — send the notification email
       updateProgress(98, 'Finishing up…', '');
-      await postToWebhook({ action: 'finalize', folderId, fields, fileCount: files.length });
+      await postToWebhook({ action: 'finalize', folderId, fields, fileCount: files.length }, 'finalize');
 
       updateProgress(100, 'Submission complete.', '');
       document.querySelectorAll('.card, .submit-card').forEach(el => el.style.display = 'none');
